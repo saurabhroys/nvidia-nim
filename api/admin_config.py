@@ -371,6 +371,15 @@ FIELDS: tuple[ConfigFieldSpec, ...] = (
         description="Protects Claude/API access. It is not admin-page login.",
     ),
     ConfigFieldSpec(
+        "ADMIN_PASS",
+        "Admin Password",
+        "runtime",
+        "secret",
+        settings_attr="admin_pass",
+        secret=True,
+        description="Password to protect this Admin UI when accessed from non-localhost.",
+    ),
+    ConfigFieldSpec(
         "PROVIDER_RATE_LIMIT",
         "Provider Rate Limit",
         "runtime",

@@ -312,6 +312,7 @@ class Settings(BaseSettings):
     anthropic_auth_token: str = Field(
         default="", validation_alias="ANTHROPIC_AUTH_TOKEN"
     )
+    admin_pass: str = Field(default="", validation_alias="ADMIN_PASS")
 
     @model_validator(mode="before")
     @classmethod

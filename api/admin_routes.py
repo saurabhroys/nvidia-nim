@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import inspect
 import ipaddress
+import secrets
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field
 
 from config.settings import Settings
@@ -42,6 +44,41 @@ class AdminConfigPayload(BaseModel):
     values: dict[str, Any] = Field(default_factory=dict)
 
 
+security = HTTPBasic()
+
+
+def require_admin_auth(
+    request: Request, credentials: HTTPBasicCredentials = Depends(security)
+) -> None:
+    """Allow admin access from localhost or with a valid password."""
+    settings = get_cached_settings()
+    admin_pass = settings.admin_pass
+
+    client_host = request.client.host if request.client else None
+    is_local = _is_loopback_host(client_host)
+
+    # Always allow localhost without a password
+    if is_local:
+        return
+
+    # If not localhost, a password MUST be configured and provided
+    if not admin_pass:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin UI is local-only unless ADMIN_PASS is configured.",
+        )
+
+    is_correct_password = secrets.compare_digest(
+        credentials.password.encode("utf8"), admin_pass.encode("utf8")
+    )
+    if not is_correct_password:
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect admin password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+
 def _is_loopback_host(host: str | None) -> bool:
     if host is None:
         return False
@@ -54,25 +91,6 @@ def _is_loopback_host(host: str | None) -> bool:
         return False
 
 
-def _origin_is_local(origin: str | None) -> bool:
-    if not origin:
-        return True
-    parsed = urlsplit(origin)
-    return _is_loopback_host(parsed.hostname)
-
-
-def require_loopback_admin(request: Request) -> None:
-    """Allow admin access only from the local machine."""
-
-    client_host = request.client.host if request.client else None
-    if not _is_loopback_host(client_host):
-        raise HTTPException(status_code=403, detail="Admin UI is local-only")
-
-    origin = request.headers.get("origin")
-    if not _origin_is_local(origin):
-        raise HTTPException(status_code=403, detail="Admin UI is local-only")
-
-
 def _asset_response(filename: str) -> FileResponse:
     path = STATIC_DIR / filename
     if not path.is_file():
@@ -81,28 +99,28 @@ def _asset_response(filename: str) -> FileResponse:
 
 
 @router.get("/admin", include_in_schema=False)
-async def admin_page(request: Request):
-    require_loopback_admin(request)
+async def admin_page(request: Request, _=Depends(require_admin_auth)):
     return _asset_response("index.html")
 
 
 @router.get("/admin/assets/{filename}", include_in_schema=False)
-async def admin_asset(filename: str, request: Request):
-    require_loopback_admin(request)
+async def admin_asset(
+    filename: str, request: Request, _=Depends(require_admin_auth)
+):
     if filename not in {"admin.css", "admin.js"}:
         raise HTTPException(status_code=404, detail="Admin asset not found")
     return _asset_response(filename)
 
 
 @router.get("/admin/api/config")
-async def get_admin_config(request: Request):
-    require_loopback_admin(request)
+async def get_admin_config(request: Request, _=Depends(require_admin_auth)):
     return load_config_response()
 
 
 @router.post("/admin/api/config/validate")
-async def validate_admin_config(payload: AdminConfigPayload, request: Request):
-    require_loopback_admin(request)
+async def validate_admin_config(
+    payload: AdminConfigPayload, request: Request, _=Depends(require_admin_auth)
+):
     return validate_updates(_filtered_values(payload.values))
 
 
@@ -111,8 +129,8 @@ async def apply_admin_config(
     payload: AdminConfigPayload,
     request: Request,
     background_tasks: BackgroundTasks,
+    _=Depends(require_admin_auth),
 ):
-    require_loopback_admin(request)
     result = write_managed_env(_filtered_values(payload.values))
     if not result["applied"]:
         return result
@@ -135,8 +153,7 @@ async def apply_admin_config(
 
 
 @router.get("/admin/api/status")
-async def admin_status(request: Request):
-    require_loopback_admin(request)
+async def admin_status(request: Request, _=Depends(require_admin_auth)):
     settings = get_cached_settings()
     registry = getattr(request.app.state, "provider_registry", None)
     cached_models: dict[str, list[str]] = {}
@@ -158,8 +175,7 @@ async def admin_status(request: Request):
 
 
 @router.get("/admin/api/providers/local-status")
-async def local_provider_status(request: Request):
-    require_loopback_admin(request)
+async def local_provider_status(request: Request, _=Depends(require_admin_auth)):
     config = load_config_response()
     values = {field["key"]: field["value"] for field in config["fields"]}
     checks = []
@@ -170,8 +186,9 @@ async def local_provider_status(request: Request):
 
 
 @router.post("/admin/api/providers/{provider_id}/test")
-async def test_provider(provider_id: str, request: Request):
-    require_loopback_admin(request)
+async def test_provider(
+    provider_id: str, request: Request, _=Depends(require_admin_auth)
+):
     settings = get_cached_settings()
     registry = getattr(request.app.state, "provider_registry", None)
     if not isinstance(registry, ProviderRegistry):
@@ -195,8 +212,7 @@ async def test_provider(provider_id: str, request: Request):
 
 
 @router.post("/admin/api/models/refresh")
-async def refresh_models(request: Request):
-    require_loopback_admin(request)
+async def refresh_models(request: Request, _=Depends(require_admin_auth)):
     settings = get_cached_settings()
     registry = getattr(request.app.state, "provider_registry", None)
     if not isinstance(registry, ProviderRegistry):
