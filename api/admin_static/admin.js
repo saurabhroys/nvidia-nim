@@ -96,20 +96,32 @@ async function api(path, options = {}) {
     headers["X-Admin-Password"] = state.adminPassword;
   }
 
-  const response = await fetch(path, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(path, {
+      ...options,
+      headers,
+    });
 
-  if (response.status === 401) {
-    showLogin();
-    throw new Error("Authentication required");
-  }
+    if (response.status === 401) {
+      showLogin();
+      throw new Error("Authentication required");
+    }
 
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
+    if (response.status === 403) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Access forbidden");
+    }
+
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}`);
+    }
+    return response.json();
+  } catch (error) {
+    if (error.name === "TypeError" && error.message === "Failed to fetch") {
+      throw new Error("Server unreachable or connection refused");
+    }
+    throw error;
   }
-  return response.json();
 }
 
 function showLogin() {
@@ -123,7 +135,7 @@ function hideLogin() {
 
 byId("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const password = byId("adminPassword").value;
+  const password = byId("adminPassword").value.trim();
   state.adminPassword = password;
   sessionStorage.setItem("adminPassword", password);
   byId("loginError").textContent = "";

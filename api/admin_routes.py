@@ -47,7 +47,7 @@ class AdminConfigPayload(BaseModel):
 def require_admin_auth(request: Request) -> None:
     """Allow admin access from localhost or with a valid password."""
     settings = get_cached_settings()
-    admin_pass = settings.admin_pass
+    admin_pass = settings.admin_pass.strip()
 
     client_host = request.client.host if request.client else None
     is_local = _is_loopback_host(client_host)
@@ -64,7 +64,7 @@ def require_admin_auth(request: Request) -> None:
         )
 
     # Check custom header instead of HTTP Basic Auth to avoid browser popups
-    provided_pass = request.headers.get("X-Admin-Password")
+    provided_pass = (request.headers.get("X-Admin-Password") or "").strip()
     if not provided_pass or not secrets.compare_digest(
         provided_pass.encode("utf8"), admin_pass.encode("utf8")
     ):
