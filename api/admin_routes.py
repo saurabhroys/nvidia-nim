@@ -37,6 +37,11 @@ LOCAL_PROVIDER_PATHS = {
     "ollama": "/api/tags",
 }
 
+from core.rate_limit import StrictSlidingWindowLimiter
+
+# Global limiter for admin auth attempts (5 attempts per 10 seconds)
+auth_limiter = StrictSlidingWindowLimiter(rate_limit=5, rate_window=10.0)
+
 
 class AdminConfigPayload(BaseModel):
     """Partial config update submitted by the admin UI."""
@@ -44,35 +49,53 @@ class AdminConfigPayload(BaseModel):
     values: dict[str, Any] = Field(default_factory=dict)
 
 
-def require_admin_auth(request: Request) -> None:
-    """Allow admin access from localhost or with a valid password."""
+from loguru import logger
+
+
+async def require_admin_auth(request: Request) -> None:
+    """Allow admin access with a valid password. Remote access requires a password."""
     settings = get_cached_settings()
-    admin_pass = settings.admin_pass.strip()
+    admin_pass = (settings.admin_pass or "").strip()
+    provided_pass = (request.headers.get("X-Admin-Password") or "").strip()
 
     client_host = request.client.host if request.client else None
     is_local = _is_loopback_host(client_host)
 
-    # Always allow localhost without a password
+    # If a password is configured, it MUST match for all access (local or remote)
+    if admin_pass:
+        is_correct = provided_pass and secrets.compare_digest(
+            provided_pass.encode("utf8"), admin_pass.encode("utf8")
+        )
+
+        if not is_correct:
+            # Apply rate limit for failed attempts
+            async with auth_limiter:
+                logger.warning(
+                    "Admin auth failed: host={} is_local={} provided_len={} expected_len={}",
+                    client_host,
+                    is_local,
+                    len(provided_pass),
+                    len(admin_pass),
+                )
+                raise HTTPException(
+                    status_code=401,
+                    detail="Incorrect admin password",
+                )
+        return
+
+    # If NO password is configured, check if it's local
     if is_local:
         return
 
-    # If not localhost, a password MUST be configured and provided via X-Admin-Password header
-    if not admin_pass:
-        raise HTTPException(
-            status_code=403,
-            detail="Admin UI is local-only unless ADMIN_PASS is configured.",
-        )
-
-    # Check custom header instead of HTTP Basic Auth to avoid browser popups
-    provided_pass = (request.headers.get("X-Admin-Password") or "").strip()
-    if not provided_pass or not secrets.compare_digest(
-        provided_pass.encode("utf8"), admin_pass.encode("utf8")
-    ):
-        # We do NOT send WWW-Authenticate here to avoid the native browser popup
-        raise HTTPException(
-            status_code=401,
-            detail="Incorrect admin password",
-        )
+    # Remote access with NO password is forbidden to prevent accidental exposure
+    logger.error(
+        "Admin remote access blocked: host={} admin_pass_configured=false",
+        client_host,
+    )
+    raise HTTPException(
+        status_code=403,
+        detail="Admin UI remote access requires ADMIN_PASS to be configured.",
+    )
 
 
 def _is_loopback_host(host: str | None) -> bool:

@@ -124,13 +124,17 @@ async function api(path, options = {}) {
   }
 }
 
-function showLogin() {
+function showLogin(message = "", isError = false) {
   byId("loginOverlay").hidden = false;
+  const status = byId("loginStatus");
+  status.textContent = message;
+  status.className = `message-area ${isError ? "error" : ""}`.trim();
   byId("adminPassword").focus();
 }
 
 function hideLogin() {
   byId("loginOverlay").hidden = true;
+  byId("loginStatus").textContent = "";
 }
 
 byId("loginForm").addEventListener("submit", async (e) => {
@@ -138,7 +142,10 @@ byId("loginForm").addEventListener("submit", async (e) => {
   const password = byId("adminPassword").value.trim();
   state.adminPassword = password;
   sessionStorage.setItem("adminPassword", password);
-  byId("loginError").textContent = "";
+
+  const status = byId("loginStatus");
+  status.textContent = "Authenticating...";
+  status.className = "message-area";
 
   try {
     await load();
@@ -146,9 +153,9 @@ byId("loginForm").addEventListener("submit", async (e) => {
     byId("adminPassword").value = "";
   } catch (error) {
     if (error.message === "Authentication required") {
-      byId("loginError").textContent = "Incorrect password";
+      showLogin("Incorrect password", true);
     } else {
-      byId("loginError").textContent = error.message;
+      showLogin(error.message, true);
     }
     sessionStorage.removeItem("adminPassword");
     state.adminPassword = "";
@@ -164,6 +171,10 @@ async function load() {
   renderProviders(config.provider_status);
   renderSections(config.sections, config.fields);
   byId("configPath").textContent = config.paths.managed;
+
+  // Reveal app shell before async API calls that may fail
+  document.querySelector(".app-shell").style.display = "grid";
+
   await validate(false);
   await refreshLocalStatus();
   updateDirtyState();
@@ -550,8 +561,17 @@ function showMessage(message, kind = "") {
 byId("validateButton").addEventListener("click", () => validate(true));
 byId("applyButton").addEventListener("click", apply);
 
+byId("logoutButton").addEventListener("click", () => {
+  sessionStorage.removeItem("adminPassword");
+  state.adminPassword = "";
+  window.location.reload();
+});
+
 load().catch((error) => {
-  if (error.message !== "Authentication required") {
-    showMessage(error.message, "error");
+  if (error.message === "Authentication required") {
+    showLogin();
+  } else {
+    // Show errors like "Remote access disabled" or "Server unreachable" in the login UI
+    showLogin(error.message, true);
   }
 });

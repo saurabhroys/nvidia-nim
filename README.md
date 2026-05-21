@@ -98,7 +98,7 @@ Many terminals make these clickable. Use your configured `PORT` if it is not `80
 
 ### 5. Open The Admin UI And Configure NVIDIA NIM
 
-Open the **Admin UI** URL from the terminal output.
+Open the **Admin UI** URL from the terminal output. If accessing from a remote IP, ensure you have set `ADMIN_PASS` in your `.env` file and restarted the server.
 
 Need an NVIDIA NIM API key? Use the **[NVIDIA NIM provider](#nvidia-nim-provider)** section below, then scroll back up here.
 

@@ -377,7 +377,7 @@ FIELDS: tuple[ConfigFieldSpec, ...] = (
         "secret",
         settings_attr="admin_pass",
         secret=True,
-        description="Password to protect this Admin UI when accessed from non-localhost.",
+        description="Password required for all Admin UI access. Remote access is disabled if this is not set.",
     ),
     ConfigFieldSpec(
         "PROVIDER_RATE_LIMIT",

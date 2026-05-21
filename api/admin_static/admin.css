@@ -54,6 +54,40 @@ textarea {
   border-right: 1px solid var(--line);
   background: #171511;
   padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.section-nav {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.logout-button {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  font-weight: 700;
+  transition: all 0.2s;
+}
+
+.logout-button:hover {
+  background: rgba(255, 116, 108, 0.1);
+  border-color: var(--error);
+  color: var(--error);
 }
 
 .brand {
