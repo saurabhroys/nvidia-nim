@@ -31,5 +31,5 @@ ENV HOST=0.0.0.0
 ENV PORT=8082
 ENV FCC_OPEN_BROWSER=false
 
-# Start the proxy server using uv command
-CMD ["uv", "run", "fcc-server"]
+# Start the proxy server using uvicorn directly
+CMD ["uv", "run", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8082"]
