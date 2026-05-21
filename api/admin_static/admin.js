@@ -4,6 +4,7 @@ const state = {
   localStatus: new Map(),
   modelOptions: [],
   activeView: "providers",
+  adminPassword: sessionStorage.getItem("adminPassword") || "",
 };
 
 const MASKED_SECRET = "********";
@@ -86,15 +87,61 @@ function statusClass(status) {
 }
 
 async function api(path, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+
+  if (state.adminPassword) {
+    headers["X-Admin-Password"] = state.adminPassword;
+  }
+
   const response = await fetch(path, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
+    headers,
   });
+
+  if (response.status === 401) {
+    showLogin();
+    throw new Error("Authentication required");
+  }
+
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}`);
   }
   return response.json();
 }
+
+function showLogin() {
+  byId("loginOverlay").hidden = false;
+  byId("adminPassword").focus();
+}
+
+function hideLogin() {
+  byId("loginOverlay").hidden = true;
+}
+
+byId("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const password = byId("adminPassword").value;
+  state.adminPassword = password;
+  sessionStorage.setItem("adminPassword", password);
+  byId("loginError").textContent = "";
+
+  try {
+    await load();
+    hideLogin();
+    byId("adminPassword").value = "";
+  } catch (error) {
+    if (error.message === "Authentication required") {
+      byId("loginError").textContent = "Incorrect password";
+    } else {
+      byId("loginError").textContent = error.message;
+    }
+    sessionStorage.removeItem("adminPassword");
+    state.adminPassword = "";
+  }
+});
 
 async function load() {
   showMessage("Loading admin config");
@@ -492,5 +539,7 @@ byId("validateButton").addEventListener("click", () => validate(true));
 byId("applyButton").addEventListener("click", apply);
 
 load().catch((error) => {
-  showMessage(error.message, "error");
+  if (error.message !== "Authentication required") {
+    showMessage(error.message, "error");
+  }
 });

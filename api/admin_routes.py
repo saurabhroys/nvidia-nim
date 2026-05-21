@@ -44,12 +44,7 @@ class AdminConfigPayload(BaseModel):
     values: dict[str, Any] = Field(default_factory=dict)
 
 
-security = HTTPBasic()
-
-
-def require_admin_auth(
-    request: Request, credentials: HTTPBasicCredentials = Depends(security)
-) -> None:
+def require_admin_auth(request: Request) -> None:
     """Allow admin access from localhost or with a valid password."""
     settings = get_cached_settings()
     admin_pass = settings.admin_pass
@@ -61,21 +56,22 @@ def require_admin_auth(
     if is_local:
         return
 
-    # If not localhost, a password MUST be configured and provided
+    # If not localhost, a password MUST be configured and provided via X-Admin-Password header
     if not admin_pass:
         raise HTTPException(
             status_code=403,
             detail="Admin UI is local-only unless ADMIN_PASS is configured.",
         )
 
-    is_correct_password = secrets.compare_digest(
-        credentials.password.encode("utf8"), admin_pass.encode("utf8")
-    )
-    if not is_correct_password:
+    # Check custom header instead of HTTP Basic Auth to avoid browser popups
+    provided_pass = request.headers.get("X-Admin-Password")
+    if not provided_pass or not secrets.compare_digest(
+        provided_pass.encode("utf8"), admin_pass.encode("utf8")
+    ):
+        # We do NOT send WWW-Authenticate here to avoid the native browser popup
         raise HTTPException(
             status_code=401,
             detail="Incorrect admin password",
-            headers={"WWW-Authenticate": "Basic"},
         )
 
 
@@ -99,14 +95,12 @@ def _asset_response(filename: str) -> FileResponse:
 
 
 @router.get("/admin", include_in_schema=False)
-async def admin_page(request: Request, _=Depends(require_admin_auth)):
+async def admin_page(request: Request):
     return _asset_response("index.html")
 
 
 @router.get("/admin/assets/{filename}", include_in_schema=False)
-async def admin_asset(
-    filename: str, request: Request, _=Depends(require_admin_auth)
-):
+async def admin_asset(filename: str, request: Request):
     if filename not in {"admin.css", "admin.js"}:
         raise HTTPException(status_code=404, detail="Admin asset not found")
     return _asset_response(filename)
