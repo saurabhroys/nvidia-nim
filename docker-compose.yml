@@ -7,12 +7,53 @@ services:
       - "8082:8082"
     volumes:
       - fcc-data:/root/.fcc
-    env_file:
-      - .env
     environment:
+      # ── Core server settings ──
       - HOST=0.0.0.0
       - PORT=8082
       - FCC_OPEN_BROWSER=false
+
+      # ── Provider API keys (set these in Dokploy Environment tab) ──
+      - NVIDIA_NIM_API_KEY=${NVIDIA_NIM_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - KIMI_API_KEY=${KIMI_API_KEY:-}
+      - WAFER_API_KEY=${WAFER_API_KEY:-}
+      - OPENCODE_API_KEY=${OPENCODE_API_KEY:-}
+      - ZAI_API_KEY=${ZAI_API_KEY:-}
+      - FIREWORKS_API_KEY=${FIREWORKS_API_KEY:-}
+
+      # ── Model routing ──
+      - MODEL=${MODEL:-nvidia_nim/nvidia/nemotron-3-super-120b-a12b}
+      - MODEL_OPUS=${MODEL_OPUS:-}
+      - MODEL_SONNET=${MODEL_SONNET:-}
+      - MODEL_HAIKU=${MODEL_HAIKU:-}
+
+      # ── Thinking output ──
+      - ENABLE_MODEL_THINKING=${ENABLE_MODEL_THINKING:-true}
+      - ENABLE_OPUS_THINKING=${ENABLE_OPUS_THINKING:-}
+      - ENABLE_SONNET_THINKING=${ENABLE_SONNET_THINKING:-}
+      - ENABLE_HAIKU_THINKING=${ENABLE_HAIKU_THINKING:-}
+
+      # ── Auth ──
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-freecc}
+
+      # ── Messaging ──
+      - MESSAGING_PLATFORM=${MESSAGING_PLATFORM:-none}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - ALLOWED_TELEGRAM_USER_ID=${ALLOWED_TELEGRAM_USER_ID:-}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - ALLOWED_DISCORD_CHANNELS=${ALLOWED_DISCORD_CHANNELS:-}
+
+      # ── Rate limiting ──
+      - PROVIDER_RATE_LIMIT=${PROVIDER_RATE_LIMIT:-1}
+      - PROVIDER_RATE_WINDOW=${PROVIDER_RATE_WINDOW:-3}
+      - PROVIDER_MAX_CONCURRENCY=${PROVIDER_MAX_CONCURRENCY:-5}
+
+      # ── HTTP timeouts ──
+      - HTTP_READ_TIMEOUT=${HTTP_READ_TIMEOUT:-300}
+      - HTTP_WRITE_TIMEOUT=${HTTP_WRITE_TIMEOUT:-60}
+      - HTTP_CONNECT_TIMEOUT=${HTTP_CONNECT_TIMEOUT:-60}
     restart: unless-stopped
 
 volumes:
